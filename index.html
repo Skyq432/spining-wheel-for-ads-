@@ -458,15 +458,12 @@
         function init() {
             canvas.width = SIZE; canvas.height = SIZE;
 
-            const savedPhone = localStorage.getItem('emmy_current_phone_demo');
-            if (savedPhone) {
-                const users = loadUsers();
-                if (users[savedPhone]) {
-                    currentUser = normalizeUser(users[savedPhone]);
-                    saveCurrentUser();
-                    document.getElementById('navBagBtn').classList.remove('hidden');
-                }
-            }
+            // Always start fresh on load/refresh — no remembered user,
+            // no remembered spins, no remembered prize bag.
+            localStorage.removeItem('emmy_current_phone_demo');
+            localStorage.removeItem('emmy_users_demo');
+            currentUser = null;
+
             updateButtonState();
             draw(angle);
         }
