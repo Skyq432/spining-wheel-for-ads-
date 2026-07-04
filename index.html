@@ -429,6 +429,28 @@
             saveUsers(users);
         }
 
+        // Self-heals any local record saved by an earlier version of this
+        // demo (e.g. one that used a "spins_remaining" field instead of
+        // "spins_done"), so old test data doesn't produce NaN or crash the spin.
+        function normalizeUser(user) {
+            if (!user || typeof user !== 'object') return null;
+            let spins_done = Number(user.spins_done);
+            if (!Number.isFinite(spins_done)) {
+                if (Number.isFinite(Number(user.spins_remaining))) {
+                    spins_done = Math.max(0, MAX_SPINS - Number(user.spins_remaining));
+                } else {
+                    spins_done = 0;
+                }
+            }
+            spins_done = Math.min(Math.max(spins_done, 0), MAX_SPINS);
+            return {
+                full_name: user.full_name || 'Guest',
+                phone_number: user.phone_number,
+                spins_done: spins_done,
+                bag: Array.isArray(user.bag) ? user.bag : []
+            };
+        }
+
         // --- Cosmetic stats (unchanged, purely decorative demo values) ---
         let currentPrizesCount = 165;
         const maxPrizes = 200;
@@ -440,7 +462,8 @@
             if (savedPhone) {
                 const users = loadUsers();
                 if (users[savedPhone]) {
-                    currentUser = users[savedPhone];
+                    currentUser = normalizeUser(users[savedPhone]);
+                    saveCurrentUser();
                     document.getElementById('navBagBtn').classList.remove('hidden');
                 }
             }
@@ -599,7 +622,8 @@
                 saveUsers(users);
             }
 
-            currentUser = users[phone];
+            currentUser = normalizeUser(users[phone]);
+            saveCurrentUser();
             localStorage.setItem('emmy_current_phone_demo', phone);
             closeRegistration();
             document.getElementById('navBagBtn').classList.remove('hidden');
