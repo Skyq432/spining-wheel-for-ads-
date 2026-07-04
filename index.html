@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emmytech | Official Win & Pile Up (Demo)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+        :root {
+            --emmy-blue: #003399;
+            --emmy-orange: #fbb03b;
+            --emmy-slate: #1e293b;
+            --emmy-red: #ef4444; 
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #ffffff;
+            color: var(--emmy-slate);
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* ── Wheel Aesthetics ── */
+        .wheel-outer {
+            position: relative;
+            width: 320px; height: 320px;
+            margin: 0 auto;
+        }
+        @media (min-width: 768px) { .wheel-outer { width: 420px; height: 420px; } }
+
+        .wheel-outer::before {
+            content: '';
+            position: absolute; inset: -15px;
+            background: radial-gradient(circle, #ffffff 0%, #f1f5f9 100%);
+            border-radius: 50%; z-index: -1;
+            box-shadow: 0 20px 50px rgba(0,51,153,0.1);
+        }
+
+        canvas { display: block; width: 100%; height: 100%; border-radius: 50%; cursor: pointer; }
+
+        .hub {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); z-index: 30;
+            width: 50px; height: 50px; border-radius: 50%;
+            background: #fff; border: 4px solid var(--emmy-blue);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: flex; align-items: center; justify-content: center;
+        }
+        
+        @keyframes tick-pop {
+            0% { transform: translate(-50%, -50%) scale(1.2); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+        .hub.ticking { animation: tick-pop 0.1s ease-out; }
+
+        .pointer-3d {
+            position: absolute; top: -15px; left: 50%;
+            transform: translateX(-50%); z-index: 40;
+            filter: drop-shadow(0 5px 10px rgba(0,51,153,0.2));
+        }
+
+        .confetti { position: fixed; width: 8px; height: 8px; z-index: 999; pointer-events: none; border-radius: 2px; }
+
+        .win-toast {
+            position: fixed; bottom: 25px; left: 50%;
+            transform: translate(-50%, 150%);
+            background: white; padding: 12px 20px;
+            border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.12);
+            display: flex; align-items: center; gap: 12px; z-index: 200;
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid #f1f5f9; width: 85%; max-width: 300px;
+        }
+        .win-toast.show { transform: translate(-50%, 0); }
+
+        .glass-overlay {
+            background: rgba(15, 23, 42, 0.9); 
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .form-glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        @keyframes heartbeat {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 51, 153, 0.3); }
+            50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(0, 51, 153, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 51, 153, 0); }
+        }
+        .animate-heartbeat { animation: heartbeat 1.5s infinite; }
+
+        .congrats-card {
+            background: linear-gradient(145deg, #003399 0%, #001a4d 100%);
+            border-radius: 3rem; position: relative; overflow: hidden;
+            box-shadow: 0 30px 60px -12px rgba(0, 51, 153, 0.5);
+        }
+
+        .loader-ring {
+            width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%; border-top-color: #fff; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .share-modal-gradient {
+            background: linear-gradient(135deg, #003399 0%, #0055ff 100%);
+        }
+
+        .policy-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            text-align: left;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen bg-slate-50/30">
+
+    <div id="winToast" class="win-toast">
+        <div class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
+            <i class="fas fa-gift"></i>
+        </div>
+        <div>
+            <p id="toastUser" class="text-xs font-800 text-slate-900 leading-none mb-1">...</p>
+            <p id="toastPrize" class="text-[10px] text-slate-500 font-bold uppercase">just won a Prize</p>
+        </div>
+    </div>
+
+    <nav class="p-4 md:p-6 border-b border-slate-100 bg-white sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <!-- Left: Bigger Logo -->
+            <div class="flex items-center">
+                <img src="https://ouvdainkxpaegczdinlp.supabase.co/storage/v1/object/public/assest/emmytech%20logo.png" 
+                     alt="Emmy Technology" 
+                     class="h-12 md:h-20 w-auto object-contain">
+            </div>
+            
+            <!-- Right: Balanced Stats & Bag -->
+            <div id="userQuickStats" class="flex items-center gap-3 md:gap-5">
+                <div class="flex items-center gap-2 bg-green-50 px-3 py-2 rounded-full border border-green-100">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                    </span>
+                    <span class="text-[10px] md:text-xs font-900 text-green-700 uppercase"><span id="activeUsers">42</span> Online</span>
+                </div>
+                
+                <button onclick="openPrizeBag()" class="flex flex-col items-center bg-blue-50 px-5 py-2 rounded-2xl border border-blue-100 transition-all active:scale-95 hover:bg-blue-100" id="navBagBtn">
+                    <span class="block text-[9px] font-bold text-blue-400 uppercase tracking-tighter">My Prizes</span>
+                    <i class="fas fa-gift text-blue-600 text-lg"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow flex flex-col items-center justify-center px-6 py-10">
+        <div class="w-full max-w-xs mx-auto mb-6 px-4">
+            <div class="flex justify-between items-end mb-2">
+                <p class="text-[10px] font-800 tracking-[0.15em] text-slate-400 uppercase">Prizes Claimed Today</p>
+                <p class="text-[13px] font-900 text-blue-700 tracking-tighter">
+                    <span id="prizeCount">165</span><span class="text-slate-300 mx-1">/</span>200
+                </p>
+            </div>
+            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50 shadow-inner">
+                <div id="prizeBar" class="h-full bg-gradient-to-r from-blue-700 via-blue-500 to-blue-400 transition-all duration-[2000ms] ease-out" style="width: 82.5%;"></div>
+            </div>
+        </div>
+
+        <div class="w-full max-w-xs mx-auto mb-8 px-4">
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-left">
+                    <p class="text-[10px] font-800 tracking-[0.15em] text-slate-400 uppercase mb-2">Spins Left</p>
+                    <p id="dashboardSpinCount" class="text-2xl font-900 text-blue-700 tracking-tight">0</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-left">
+                    <p class="text-[10px] font-800 tracking-[0.15em] text-slate-400 uppercase mb-2">Referral Bonus</p>
+                    <p id="referralProgressText" class="text-sm font-900 text-slate-800 tracking-tight">0/2 to free spin</p>
+                    <p id="referralProgressSubtext" class="text-[10px] font-700 text-slate-400 uppercase tracking-wide mt-1">Invite 2 friends</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="game-container" class="w-full max-w-lg text-center">
+            <div class="wheel-outer mb-12">
+                <div class="pointer-3d">
+                    <svg width="40" height="50" viewBox="0 0 40 50">
+                        <path d="M20 50L0 15C0 6.7 6.7 0 15 0H25C33.3 0 40 6.7 40 15L20 50Z" fill="#ef4444"/>
+                        <circle cx="20" cy="15" r="5" fill="white"/>
+                    </svg>
+                </div>
+                <canvas id="wheel"></canvas>
+                <div id="hub" class="hub"><div class="w-2 h-2 bg-blue-700 rounded-full"></div></div>
+            </div>
+
+            <button id="spinInitBtn" onclick="requestAccess()" class="w-full bg-[#003399] text-white py-6 rounded-3xl font-900 text-xl tracking-widest shadow-2xl animate-heartbeat active:scale-95 transition-all disabled:opacity-50 disabled:animate-none">
+                SPIN TO WIN
+            </button>
+            
+            <button onclick="openPrizeBag()" class="mt-4 md:hidden w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-800 text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                <i class="fas fa-box-open"></i> View My Prizes
+            </button>
+        </div>
+
+        <!-- Registration Overlay -->
+        <div id="reg-overlay" class="hidden fixed inset-0 z-[100] glass-overlay flex items-center justify-center p-6">
+            <section class="w-full max-w-md form-glass-card p-10 rounded-[3rem] shadow-2xl border border-white/20">
+                <div class="text-center mb-8">
+                    <h3 class="text-2xl font-900 text-slate-900 mb-2 tracking-tight uppercase leading-none">Identify Wins</h3>
+                    <p class="text-slate-500 text-sm font-bold leading-relaxed mt-2 text-center">Register to get your free spins. Activation is handled via WhatsApp!</p>
+                </div>
+                <form id="regForm" onsubmit="handleAuth(event)" class="space-y-4">
+                    <input type="text" id="userName" required placeholder="Full Name" class="w-full bg-white border-2 border-slate-100 rounded-2xl px-6 py-4 outline-none font-bold focus:border-blue-600 transition-all">
+                    <input 
+                    type="tel" 
+                    id="userPhone" 
+                    required 
+                    inputmode="numeric"
+                    autocomplete="tel"
+                    placeholder="WhatsApp Number (e.g. 08146503700)" 
+                    class="w-full bg-white border-2 border-slate-100 rounded-2xl px-6 py-4 outline-none font-bold focus:border-blue-600 transition-all">
+                    <div id="regError" role="alert" aria-live="polite" class="text-red-600 text-xs font-bold text-center hidden bg-red-50 p-3 rounded-xl border border-red-100 min-h-[44px] flex items-center justify-center"></div>
+                    <button type="submit" id="regSubmit" class="w-full bg-blue-700 text-white py-5 rounded-2xl font-900 uppercase tracking-widest mt-2 shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-transform">
+                        <span id="regBtnText">START SPINNING 🚀</span>
+                    </button>
+                </form>
+            </section>
+        </div>
+
+        <!-- Victory Modal -->
+        <div id="resultModal" class="hidden fixed inset-0 z-[110] bg-white/95 backdrop-blur-2xl overflow-y-auto">
+            <div class="min-h-screen flex flex-col items-center justify-center p-4">
+                <div class="w-full max-w-lg py-10">
+                    <div class="congrats-card p-10 md:p-14 text-center mb-8">
+                        <div class="flex justify-between items-center mb-10 relative">
+                            <div class="px-5 py-2 bg-white/10 rounded-full border border-white/20 text-[10px] font-900 text-white uppercase tracking-widest">
+                                Bag: <span id="winCount">0</span> Items
+                            </div>
+                            <button onclick="closeModal()" class="text-white/40 hover:text-white transition-colors"><i class="fas fa-times-circle text-2xl"></i></button>
+                        </div>
+                        <div id="modalEmoji" class="text-8xl mb-6 relative">🎉</div>
+                        <h2 id="resultTitle" class="text-3xl md:text-5xl font-900 text-white mb-6 tracking-tighter relative uppercase leading-none"></h2>
+                        <p id="resultMsg" class="text-white/70 mb-10 font-bold leading-relaxed max-w-xs mx-auto relative"></p>
+                        
+                        <div class="space-y-4">
+                            <button id="resultWhatsAppBtn" onclick="claimViaWhatsApp()" class="w-full bg-green-500 text-white py-6 rounded-[2rem] font-900 shadow-xl flex items-center justify-center gap-2 transform active:scale-95 transition-all">
+                                <i class="fab fa-whatsapp text-2xl"></i> <span id="resultWhatsAppBtnText">MESSAGE EMMYTECH</span>
+                            </button>
+                            <button onclick="openShareModal()" class="w-full bg-white text-blue-900 py-6 rounded-[2rem] font-900 shadow-xl flex flex-col items-center justify-center gap-1 transform active:scale-95 transition-transform relative">
+                                <span class="flex items-center gap-2 font-900 text-xl tracking-tighter uppercase italic italic">Request Favor</span>
+                                <span class="text-[10px] text-blue-950/60 uppercase tracking-widest font-800">2 Friend Clicks = +1 Spin</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Collection Policy Section -->
+                    <div class="policy-card border-2 border-slate-100">
+                        <h4 class="text-xs font-900 text-blue-900 uppercase tracking-widest mb-6 text-center border-b pb-4">Collection Policy</h4>
+                        <div class="grid grid-cols-1 gap-6">
+                            <div class="flex items-start gap-4">
+                                <div class="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center shrink-0 text-xs font-bold">1</div>
+                                <p class="text-[11px] font-bold text-slate-600 leading-relaxed"><span class="text-slate-900 uppercase block">Registered Verification</span> Claims must be made from the exact WhatsApp number registered on this wheel.</p>
+                            </div>
+                            <div class="flex items-start gap-4">
+                                <div class="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center shrink-0 text-xs font-bold">2</div>
+                                <p class="text-[11px] font-bold text-slate-600 leading-relaxed"><span class="text-slate-900 uppercase block">System Log Matching</span> All prizes are cross-checked against our internal records before approval.</p>
+                            </div>
+                            <div class="flex items-start gap-4">
+                                <div class="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center shrink-0 text-xs font-bold">3</div>
+                                <p class="text-[11px] font-bold text-slate-600 leading-relaxed"><span class="text-slate-900 uppercase block">Zero Threshold</span> You don't need a minimum number of wins to claim. Collect any item at any time.</p>
+                            </div>
+                            <div class="flex items-start gap-4">
+                                <div class="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center shrink-0 text-xs font-bold">4</div>
+                                <p class="text-[11px] font-bold text-slate-600 leading-relaxed"><span class="text-slate-900 uppercase block">Shop Collection</span> Prizes are stored in your virtual bag until you collect them at the shop.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OUT OF SPINS MODAL -->
+        <div id="outOfSpinsModal" class="hidden fixed inset-0 z-[130] glass-overlay flex items-center justify-center p-4">
+            <div class="w-full max-w-md bg-white rounded-[3rem] shadow-2xl p-10 text-center relative overflow-hidden">
+                <button onclick="closeOutOfSpins()" class="absolute top-6 right-6 text-slate-300 hover:text-slate-500"><i class="fas fa-times-circle text-2xl"></i></button>
+                <div class="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">
+                    <i class="fas fa-battery-empty"></i>
+                </div>
+                <h3 class="text-2xl font-900 text-slate-900 mb-2 uppercase tracking-tight leading-none">No Spins Left</h3>
+                <p class="text-slate-500 text-sm mb-8 font-bold leading-relaxed">Please ask a friend to click your favor link or message us on WhatsApp for a bonus spin activation.</p>
+                
+                <div class="space-y-4">
+                    <button onclick="openShareModal()" class="w-full bg-blue-700 text-white py-5 rounded-2xl font-900 uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 transform active:scale-95 transition-all">
+                        <i class="fas fa-share-alt"></i> Share Help Link
+                    </button>
+                    <button onclick="claimViaWhatsApp('DM')" class="w-full border-2 border-slate-100 text-slate-600 py-5 rounded-2xl font-900 uppercase tracking-widest flex items-center justify-center gap-3 transform active:scale-95 transition-all">
+                        <i class="fab fa-whatsapp text-green-500 text-xl"></i> Message Emmytech
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SHARE MODAL -->
+        <div id="shareModal" class="hidden fixed inset-0 z-[140] glass-overlay overflow-y-auto flex items-center justify-center p-4">
+            <div class="w-full max-w-md my-auto bg-white rounded-[2.5rem] shadow-2xl overflow-hidden relative border border-slate-100">
+                <div class="bg-gradient-to-br from-blue-700 to-blue-900 p-8 text-white text-center relative">
+                    <button onclick="closeShareModal()" class="absolute top-5 right-5 text-white/60 hover:text-white transition-colors">
+                        <i class="fas fa-times-circle text-2xl"></i>
+                    </button>
+                    <div class="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/20">
+                        <i class="fas fa-paper-plane text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-800 uppercase tracking-tight mb-1">Favor Request</h3>
+                    <p class="text-blue-100 text-[10px] font-600 uppercase tracking-widest opacity-80">Copy & Paste to your status</p>
+                </div>
+                
+                <div class="p-8">
+                    <div class="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6 mb-6">
+                        <div id="personalRequestText" class="text-sm text-slate-700 font-600 leading-relaxed italic text-center whitespace-pre-line">
+                            Loading favor link...
+                        </div>
+                    </div>
+                    
+                    <button id="copyInviteBtn" onclick="executeCopy(event)" class="w-full bg-blue-700 hover:bg-blue-800 text-white py-5 rounded-2xl font-800 uppercase tracking-widest shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-all">
+                        <i class="fas fa-copy"></i> Copy Message
+                    </button>
+                    
+                    <p class="text-center text-[9px] text-slate-400 font-700 mt-4 uppercase tracking-tighter italic">
+                        This personal message works best with friends!
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prize Bag Modal -->
+        <div id="prizeBagModal" class="hidden fixed inset-0 z-[120] glass-overlay flex items-center justify-center p-4">
+            <div class="w-full max-w-md bg-white rounded-[3rem] shadow-2xl p-8 max-h-[80vh] flex flex-col">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-900 text-blue-900 uppercase tracking-tight">My Prize Bag</h3>
+                    <button onclick="closePrizeBag()" class="text-slate-300 hover:text-slate-500 transition-colors"><i class="fas fa-times-circle text-2xl"></i></button>
+                </div>
+                <div id="prizeBagList" class="flex-grow overflow-y-auto space-y-3 pr-2"></div>
+                <div class="mt-6 pt-4 border-t border-slate-100">
+                    <p class="text-[10px] text-slate-400 font-bold text-center uppercase tracking-widest">Verify via WhatsApp (0814 650 3700)</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        /* ================================================================
+           DEMO / SAMPLE VERSION — no backend.
+           - No Supabase, no network calls, no realtime sync.
+           - Everything lives in localStorage on this device only.
+           - The wheel has 8 prizes + Try Again (matching the reference
+             image): Laptop, Phone, Headphone, 1 More Spin, N1000 Cash,
+             N10,000 Cash, N100 Airtime, N50 Airtime, Try Again.
+           - Winners are picked randomly using each item's "gravity"
+             weight (higher gravity = more likely). "1 More Spin"
+             grants an extra spin instead of a bag item.
+           ================================================================ */
+
+        const canvas = document.getElementById('wheel');
+        const ctx = canvas.getContext('2d');
+        const hub = document.getElementById('hub');
+        const COLORS = ['#003399', '#fbb03b', '#ffffff'];
+        const TEXT_COLORS = { '#003399': '#ffffff', '#fbb03b': '#000000', '#ffffff': '#003399' };
+        const SIZE = 800;
+        const CX = SIZE/2, CY = SIZE/2, R = SIZE/2 - 15;
+
+        // 8 prizes + Try Again, matching the reference wheel image.
+        // "gravity" = relative weight used when the wheel randomly picks a winner.
+        // "kind": 'prize' (goes to bag), 'retry' (no win), 'bonus_spin' (grants +1 spin)
+        const WHEEL_ITEMS = [
+            { id: 'LAPTOP',      label: 'Laptop',       kind: 'prize',      gravity: 1  },
+            { id: 'PHONE',       label: 'Phone',        kind: 'prize',      gravity: 2  },
+            { id: 'HEADPHONE',   label: 'Headphone',    kind: 'prize',      gravity: 5  },
+            { id: 'MORE_SPIN',   label: '1 More Spin',  kind: 'bonus_spin', gravity: 6  },
+            { id: 'CASH_1000',   label: 'N1000 Cash',   kind: 'prize',      gravity: 4  },
+            { id: 'CASH_10000',  label: 'N10,000 Cash', kind: 'prize',      gravity: 1  },
+            { id: 'AIRTIME_100', label: 'N100 Airtime', kind: 'prize',      gravity: 10 },
+            { id: 'AIRTIME_50',  label: 'N50 Airtime',  kind: 'prize',      gravity: 15 },
+            { id: 'TRY_AGAIN',   label: 'Try Again',    kind: 'retry',      gravity: 20 }
+        ];
+        let prizesList = WHEEL_ITEMS;
+        let lastWonLabel = '';
+
+        function buildWeightedPool(items) {
+            const pool = [];
+            items.forEach(item => {
+                const gravity = parseInt(item.gravity, 10);
+                if (!isNaN(gravity) && gravity > 0) {
+                    for (let i = 0; i < gravity; i++) pool.push(item);
+                }
+            });
+            return pool;
+        }
+
+        let angle = 0;
+        let spinning = false;
+        let lastTickIdx = -1;
+        let currentUser = null; // { full_name, phone_number, spins_remaining, bag: [] }
+        let activeShortLink = "";
+        let lastSpinOutcome = 'WIN';
+
+        // --- Local "storage" helpers (replaces Supabase) ---
+        function loadUsers() {
+            try { return JSON.parse(localStorage.getItem('emmy_users_demo') || '{}'); }
+            catch (e) { return {}; }
+        }
+        function saveUsers(users) {
+            localStorage.setItem('emmy_users_demo', JSON.stringify(users));
+        }
+        function saveCurrentUser() {
+            if (!currentUser) return;
+            const users = loadUsers();
+            users[currentUser.phone_number] = currentUser;
+            saveUsers(users);
+        }
+
+        // --- Cosmetic stats (unchanged, purely decorative demo values) ---
+        let currentPrizesCount = 165;
+        const maxPrizes = 200;
+
+        function init() {
+            canvas.width = SIZE; canvas.height = SIZE;
+
+            const savedPhone = localStorage.getItem('emmy_current_phone_demo');
+            if (savedPhone) {
+                const users = loadUsers();
+                if (users[savedPhone]) {
+                    currentUser = users[savedPhone];
+                    document.getElementById('navBagBtn').classList.remove('hidden');
+                }
+            }
+            updateButtonState();
+            draw(angle);
+        }
+
+        function updateDashboardStats() {
+            const spinEl = document.getElementById('dashboardSpinCount');
+            if (spinEl) spinEl.innerText = currentUser ? Math.max(0, currentUser.spins_remaining) : 0;
+
+            // Referral bonus tracking needs a real backend to work across devices,
+            // so in this offline demo it's shown as static/inactive.
+            const progressEl = document.getElementById('referralProgressText');
+            const subEl = document.getElementById('referralProgressSubtext');
+            if (!progressEl || !subEl) return;
+            progressEl.innerText = '0/2 to free spin';
+            subEl.innerText = 'Invite 2 friends';
+        }
+
+        function setResultWhatsAppState(didWin) {
+            lastSpinOutcome = didWin ? 'WIN' : 'LOSE';
+            const textEl = document.getElementById('resultWhatsAppBtnText');
+            if (textEl) {
+                textEl.innerText = didWin ? 'MESSAGE TO CLAIM' : 'MESSAGE FOR HELP';
+            }
+        }
+
+        function updateButtonState() {
+            const btn = document.getElementById('spinInitBtn');
+            if (!currentUser) {
+                btn.innerText = "SPIN TO WIN";
+                btn.style.backgroundColor = "#003399";
+                btn.disabled = false;
+            } else if (spinning) {
+                btn.innerText = "LOCKING RESULT...";
+                btn.style.backgroundColor = "#003399";
+                btn.disabled = true;
+            } else {
+                const remaining = currentUser.spins_remaining;
+                if (remaining <= 0) {
+                    btn.innerText = "GET MORE SPINS 🚀";
+                    btn.style.backgroundColor = "#64748b";
+                    btn.disabled = false;
+                } else {
+                    btn.innerText = `SPIN NOW (${remaining})`;
+                    btn.style.backgroundColor = "#003399";
+                    btn.disabled = false;
+                }
+            }
+            updateDashboardStats();
+        }
+
+        function draw(currentAngle) {
+            ctx.clearRect(0,0,SIZE,SIZE);
+            if (!prizesList.length) return;
+
+            const ARC = (2 * Math.PI) / prizesList.length;
+            prizesList.forEach((p, i) => {
+                const color = COLORS[i % COLORS.length];
+                const start = currentAngle + i * ARC;
+                ctx.beginPath();
+                ctx.moveTo(CX, CY);
+                ctx.arc(CX, CY, R, start, start + ARC);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.save();
+                ctx.translate(CX, CY);
+                ctx.rotate(start + ARC/2);
+                ctx.fillStyle = TEXT_COLORS[color] || '#000';
+                ctx.font = `800 26px 'Plus Jakarta Sans'`;
+                ctx.textAlign = "right";
+                ctx.textBaseline = "middle";
+                ctx.fillText(p.label.toUpperCase(), R - 40, 0);
+                ctx.restore();
+            });
+            ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2); ctx.strokeStyle = '#003399'; ctx.lineWidth = 4; ctx.stroke();
+        }
+
+        function showRegError(message) {
+            const errorBox = document.getElementById('regError');
+            errorBox.innerText = message;
+            errorBox.classList.remove('hidden');
+        }
+
+        function hideRegError() {
+            const errorBox = document.getElementById('regError');
+            errorBox.innerText = "";
+            errorBox.classList.add('hidden');
+        }
+
+        function setRegSubmitting(isSubmitting) {
+            const btn = document.getElementById('regSubmit');
+            const btnText = document.getElementById('regBtnText');
+            btn.disabled = isSubmitting;
+            btnText.innerHTML = isSubmitting ? `<div class="loader-ring"></div>` : `START SPINNING 🚀`;
+        }
+
+        function openRegistration() {
+            hideRegError();
+            setRegSubmitting(false);
+            document.getElementById('reg-overlay').classList.remove('hidden');
+        }
+
+        function closeRegistration() {
+            hideRegError();
+            setRegSubmitting(false);
+            document.getElementById('reg-overlay').classList.add('hidden');
+        }
+
+        function normalizeNigerianPhone(rawPhone) {
+            if (!rawPhone) return null;
+            let cleaned = rawPhone.replace(/\D/g, '');
+            if (cleaned.startsWith('234')) cleaned = '0' + cleaned.slice(3);
+            if (cleaned.length === 10 && /^[7-9]/.test(cleaned)) cleaned = '0' + cleaned;
+            const validPattern = /^0(7|8|9)\d{9}$/;
+            if (!validPattern.test(cleaned)) return null;
+            return cleaned;
+        }
+
+        function handleAuth(e) {
+            e.preventDefault();
+
+            const nameInput = document.getElementById('userName');
+            const phoneInput = document.getElementById('userPhone');
+
+            hideRegError();
+            setRegSubmitting(true);
+
+            const name = nameInput.value.trim().replace(/\s+/g, ' ');
+            const rawPhone = phoneInput.value.trim();
+            const phone = normalizeNigerianPhone(rawPhone);
+
+            if (!name) {
+                showRegError("Please enter your full name.");
+                setRegSubmitting(false);
+                nameInput.focus();
+                return;
+            }
+            if (!phone) {
+                showRegError("Please enter a valid Nigerian WhatsApp number.");
+                setRegSubmitting(false);
+                phoneInput.focus();
+                return;
+            }
+            phoneInput.value = phone;
+
+            const users = loadUsers();
+            if (!users[phone]) {
+                users[phone] = {
+                    full_name: name,
+                    phone_number: phone,
+                    spins_remaining: 1,
+                    bag: []
+                };
+                saveUsers(users);
+            }
+
+            currentUser = users[phone];
+            localStorage.setItem('emmy_current_phone_demo', phone);
+            closeRegistration();
+            document.getElementById('navBagBtn').classList.remove('hidden');
+            updateButtonState();
+        }
+
+        function requestAccess() {
+            if (!currentUser) {
+                openRegistration();
+                return;
+            }
+            if (spinning) return;
+
+            if (currentUser.spins_remaining <= 0) {
+                document.getElementById('outOfSpinsModal').classList.remove('hidden');
+                return;
+            }
+
+            performSpin();
+        }
+
+        function performSpin() {
+            if (spinning || !currentUser) return;
+            if (currentUser.spins_remaining <= 0) {
+                document.getElementById('outOfSpinsModal').classList.remove('hidden');
+                return;
+            }
+
+            spinning = true;
+            lastTickIdx = -1;
+            updateButtonState();
+
+            // Random weighted pick from the wheel (weights = "gravity").
+            const pool = buildWeightedPool(WHEEL_ITEMS);
+            const winner = pool[Math.floor(Math.random() * pool.length)];
+            const winnerIdx = prizesList.findIndex(p => p.id === winner.id);
+
+            currentUser.spins_remaining -= 1;
+            saveCurrentUser();
+            updateButtonState();
+
+            const ARC = (2 * Math.PI) / prizesList.length;
+            const targetMod = (1.5 * Math.PI - winnerIdx * ARC - ARC / 2) % (Math.PI * 2);
+            let rotationDiff = targetMod - (angle % (Math.PI * 2));
+            if (rotationDiff < 0) rotationDiff += Math.PI * 2;
+
+            const totalDelta = rotationDiff + (12 * 2 * Math.PI);
+            const duration = 8000;
+            const startAngle = angle;
+            const startTime = performance.now();
+
+            function animate(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 4);
+
+                angle = startAngle + totalDelta * eased;
+                draw(angle);
+
+                const currentIdxAtTop = Math.floor(
+                    ((((1.5 * Math.PI - angle) % (2 * Math.PI)) + 2 * Math.PI) / ARC)
+                ) % prizesList.length;
+
+                if (currentIdxAtTop !== lastTickIdx) {
+                    lastTickIdx = currentIdxAtTop;
+                    hub.classList.remove('ticking');
+                    void hub.offsetWidth;
+                    hub.classList.add('ticking');
+                }
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    finalizeSpin(winner);
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        function finalizeSpin(winner) {
+            let didWin = false;
+            let resultMsg = "";
+            let emoji = "🤏";
+
+            if (winner.kind === 'prize') {
+                didWin = true;
+                lastWonLabel = winner.label;
+                currentUser.bag.push({ prize_label: winner.label, status: 'Pending' });
+                saveCurrentUser();
+                spawnSprinkles();
+                resultMsg = `Good job ${currentUser.full_name.split(' ')[0]}. This is now saved in your bag. Message us to claim.`;
+                emoji = "🎉";
+            } else if (winner.kind === 'bonus_spin') {
+                didWin = true;
+                currentUser.spins_remaining += 1;
+                saveCurrentUser();
+                resultMsg = "Nice! You just earned an extra spin — give it another go.";
+                emoji = "🔄";
+            } else {
+                // retry / no win
+                didWin = false;
+                resultMsg = "You did not win this round. Message Emmytech to ask about more spins.";
+                emoji = "🤏";
+            }
+
+            document.getElementById('winCount').innerText = currentUser.bag.length;
+            setResultWhatsAppState(didWin && winner.kind === 'prize');
+
+            document.getElementById('resultTitle').innerText = winner.kind === 'retry' ? "Almost" : winner.label;
+            document.getElementById('resultMsg').innerText = resultMsg;
+            document.getElementById('modalEmoji').innerText = emoji;
+
+            document.getElementById('resultModal').classList.remove('hidden');
+
+            spinning = false;
+            updateButtonState();
+        }
+
+        function openPrizeBag() {
+            if (!currentUser) return requestAccess();
+            const bag = currentUser.bag || [];
+            const bagList = document.getElementById('prizeBagList');
+            if (!bag.length) {
+                bagList.innerHTML = `<div class="text-center py-10"><i class="fas fa-ghost text-slate-100 text-6xl mb-4"></i><p class="text-slate-400 font-bold text-sm uppercase">Empty Bag</p></div>`;
+            } else {
+                bagList.innerHTML = bag.map(item =>
+                    `<div class="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100"><span class="text-xs font-900 text-blue-900 uppercase">${item.prize_label}</span><span class="px-3 py-1 rounded-full text-[8px] font-900 uppercase bg-orange-100 text-orange-600">${item.status}</span></div>`
+                ).join('');
+            }
+            document.getElementById('prizeBagModal').classList.remove('hidden');
+        }
+
+        async function openShareModal() {
+            if (!currentUser) return requestAccess();
+            closeOutOfSpins();
+            closeModal();
+
+            const baseUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            const longUrl = `${baseUrl}`;
+
+            const displayArea = document.getElementById('personalRequestText');
+            displayArea.innerHTML = "<span class='text-blue-500 animate-pulse font-800 uppercase text-[10px] tracking-widest'>Preparing favor link...</span>";
+            document.getElementById('shareModal').classList.remove('hidden');
+
+            let finalLink = longUrl;
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, { signal: controller.signal });
+                if (res.ok) {
+                    const short = await res.text();
+                    if (short.startsWith('http')) finalLink = short;
+                }
+            } catch (e) {}
+
+            activeShortLink = finalLink;
+            const messageStart = "Please do me a favor and click this link for me.\n\nIt helps me win a prize at Emmytech and you get a free spin too.\n\nLet me know when you've done it!\n\nLink: ";
+            displayArea.innerHTML = `${messageStart}<span class="text-blue-600 underline break-all font-800 tracking-tight">${finalLink}</span>`;
+            window._viralMsg = messageStart + finalLink;
+        }
+
+        async function executeCopy(e) {
+            const textToCopy = window._viralMsg || "";
+            try {
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+
+                const btn = document.getElementById('copyInviteBtn');
+                const originalContent = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Message Copied';
+                btn.style.backgroundColor = "#16a34a";
+                setTimeout(() => {
+                    btn.innerHTML = originalContent;
+                    btn.style.backgroundColor = "";
+                }, 3000);
+            } catch (err) {}
+        }
+
+        function closeModal() { document.getElementById('resultModal').classList.add('hidden'); }
+        function closePrizeBag() { document.getElementById('prizeBagModal').classList.add('hidden'); }
+        function closeOutOfSpins() { document.getElementById('outOfSpinsModal').classList.add('hidden'); }
+        function closeShareModal() { document.getElementById('shareModal').classList.add('hidden'); }
+
+        function claimViaWhatsApp(mode = lastSpinOutcome) {
+            const firstName = currentUser?.full_name ? currentUser.full_name.split(' ')[0] : 'there';
+            let msg = "";
+
+            if (mode === 'REGISTER') {
+                msg = `Hello Emmytech, my name is ${firstName}. I just registered on the wheel and I am ready for my free spin.`;
+            } else if (mode === 'DM') {
+                msg = `Hello Emmytech, my name is ${firstName}. I have used my spins and I would like to know how to get more spins.`;
+            } else if (mode === 'LOSE') {
+                msg = `Hello Emmytech, my name is ${firstName}. I just finished a spin but I did not win this round. Please share how I can get another spin.`;
+            } else {
+                // WIN — references whichever prize was actually won on the wheel.
+                const prize = lastWonLabel || 'a prize';
+                msg = `Hello Emmytech, my name is ${firstName}. I won ${prize} and I want to claim it.`;
+            }
+
+            window.open(`https://wa.me/2348146503700?text=${encodeURIComponent(msg)}`);
+        }
+
+        function spawnSprinkles() {
+            for (let i = 0; i < 50; i++) {
+                const conf = document.createElement('div');
+                conf.className = 'confetti';
+                conf.style.left = Math.random() * 100 + 'vw';
+                conf.style.backgroundColor = ['#003399', '#fbb03b', '#ef4444'][Math.floor(Math.random() * 3)];
+                document.body.appendChild(conf);
+                conf.animate(
+                    [{ transform: `translate(0, 0)`, opacity: 1 }, { transform: `translate(${(Math.random()-0.5)*200}px, 100vh)`, opacity: 0 }],
+                    { duration: 3000 }
+                ).onfinish = () => conf.remove();
+            }
+        }
+
+        const names = ["Ayo", "Faith", "Segun", "Chidi", "Umar", "Sade", "Tayo", "David", "Keji", "Leye"];
+        const gifts = ["Laptop", "Phone", "Headphone", "N1000 Cash", "N10,000 Cash", "N100 Airtime", "N50 Airtime"];
+
+        function showToast() {
+            const toast = document.getElementById('winToast');
+            if (toast) {
+                if (currentPrizesCount < 198) {
+                    currentPrizesCount++;
+                    const countEl = document.getElementById('prizeCount');
+                    const barEl = document.getElementById('prizeBar');
+                    if (countEl) countEl.innerText = currentPrizesCount;
+                    if (barEl) barEl.style.width = (currentPrizesCount / maxPrizes * 100) + "%";
+                }
+                document.getElementById('toastUser').innerText = names[Math.floor(Math.random()*names.length)] + " (08" + Math.floor(Math.random()*9) + "***" + Math.floor(Math.random()*99) + ")";
+                document.getElementById('toastPrize').innerText = "JUST WON " + gifts[Math.floor(Math.random()*gifts.length)];
+                toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 3000);
+            }
+        }
+        setInterval(showToast, 8000);
+        setInterval(() => { const el = document.getElementById('activeUsers'); if (el) el.innerText = Math.max(18, parseInt(el.innerText) + (Math.floor(Math.random()*7)-3)); }, 4000);
+        window.onload = init;
+    </script>
+</body>
+</html>
